@@ -81,7 +81,36 @@ def main():
             listings_per_user = round(total_listings/total_users,1)
             st.markdown('#### Listings Per User')
             st.metric(label='', value=listings_per_user)
-            
+    charts_col = st.columns((0.7, 0.3), gap='medium')
+    
+    with charts_col[0]:
+        df_present['date'] = pd.to_datetime(df_present['time_posted_local']).dt.date
+        listing_count_df = df_present.groupby('date')['listing_sk'].count().reset_index()
+        st.markdown('#### Listings Trend')
+        st.line_chart(data=listing_count_df, x='date', y='listing_sk', use_container_width=True)
+        print(df_present.columns)
+        listing_category_count_df = df_present.groupby(['date', 'category_name_an'])['listing_sk'].count().reset_index()
+        heatmap = make_heatmap(listing_category_count_df, 'date', 'category_name_an', 'listing_sk', 'greens')
+        st.altair_chart(heatmap, use_container_width=True) 
+        
+    with charts_col[1]:
+        st.markdown('#### Top Categories')
+        category_count_df = df_present.groupby('category_name_an')['listing_sk'].count().reset_index()
+        st.dataframe(category_count_df,
+                     column_order=("Category", "Listings"),
+                     hide_index=True,
+                     width=None,
+                     column_config={
+                        "category_name_an": st.column_config.TextColumn(
+                            "Categories"
+                        ),
+                        "listing_sk": st.column_config.ProgressColumn(
+                            "Listings",
+                            format="%f",
+                            min_value=0,
+                            max_value=max(category_count_df['listing_sk']),
+                         )}
+                     )
             
 
 main()
