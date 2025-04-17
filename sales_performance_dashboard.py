@@ -4,7 +4,7 @@ import altair as alt
 import plotly.express as px
 
 st.set_page_config(
-    page_title="Bayut and Dubizzle Monthly Sales Dashboard",
+    page_title="Bayut and Dubizzle Listings Dashboard",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded")
@@ -14,103 +14,113 @@ alt.themes.enable("dark")
 def format_num(num):
     if num > 1000000:
         if not num % 1000000:
-            return f'{num // 1000000}M'
-        return f'{round(num / 1000000, 1)}M'
-    return f'{round(num // 1000,1)}K'
-
-def make_heatmap(input_df, input_y, input_x, input_color, input_color_theme):
-    heatmap = alt.Chart(input_df).mark_rect().encode(
-            y=alt.Y(f'{input_y}:O', axis=alt.Axis(title="Date", titleFontSize=18, titlePadding=15, titleFontWeight=900, labelAngle=0)),
-            x=alt.X(f'{input_x}:O', axis=alt.Axis(title="", titleFontSize=18, titlePadding=15, titleFontWeight=900)),
-            color=alt.Color(f'max({input_color}):Q',
-                             legend=None,
-                             scale=alt.Scale(scheme=input_color_theme)),
-            stroke=alt.value('black'),
-            strokeWidth=alt.value(0.25),
-        ).properties(width=900
-        ).configure_axis(
-        labelFontSize=12,
-        titleFontSize=12
-        ) 
-    # height=300
-    return heatmap
+            return f'{num // 1000000} M'
+        return f'{round(num / 1000000, 2)} M'
+    elif num > 1000:
+        return f'{round(num / 1000,2)} K'
+    else:
+        return round(num,2)
 
 def main():
 
     df = pd.read_csv("data_for_dashboard.csv")
+    df = df[df['outlier_flag']=='Normal']
     with st.sidebar:
-        st.title('Bayut and Dubizzle Monthly Sales Dashboard')
-        month_list = list(df['month_posted'].unique())[::-1]
+        st.title("Bayut and Dubizzle Listings Dashboard")
+        month_list = list(df['month_posted'].unique())
+        month_list.append('All - Apr, May & Jun 2020')
         selected_month= st.selectbox('Select a month', month_list, index=len(month_list)-1)
-        df_present = df[df['month_posted'] == selected_month]
-        df_prev = df[df['month_posted'] == selected_month-1]
-
+        if selected_month != 'All - Apr, May & Jun 2020':
+            df_present = df[df['month_posted'] == selected_month]
+        else:
+            df_present = df
+        category_list = sorted(list(df['category_name_an'].unique()))
+        category_list[-1] = 'All'
+        selected_category= st.selectbox('Select a category', category_list, index=len(category_list)-1)
+        if selected_category!='All':
+            df_present = df_present[df_present['category_name_an'] == selected_category]
+        min_price = 0
+        max_value = int(df_present['listing_price'].max())
+        min_price, max_price = st.slider(
+        'Select Price Range:',
+        min_value=int(df['listing_price'].min()),
+        max_value=int(df['listing_price'].max()),
+        value=(int(df['listing_price'].min()), int(df['listing_price'].max())),
+        step=10
+        )
+    df_present = df_present[(df_present['listing_price'] >= min_price) & (df_present['listing_price'] <= max_price)]
         
-    col = st.columns((0.2, 0.2, 0.2, 0.2, 0.2), gap='medium')
+    col = st.columns((0.2, 0.2, 0.2, 0.2, 0.2), gap='small')
     with col[0]:
         with st.container(border=True):
-            st.markdown('#### Total Listings')
-            total_listings = df_present['listing_sk'].nunique()
-            total_listings_prev_month = int(df_prev['listing_sk'].nunique())
-            st.metric(label='', value=format_num(total_listings), delta=total_listings_prev_month)
+            #total_listings = df_present['listing_sk'].nunique()
+            total_listings = df_present['listing_sk'].count()
+            st.metric(label='Total Listings', value=format_num(total_listings))
     with col[1]:
         with st.container(border=True):
-            st.markdown('#### Total Users')
             total_users = df_present['user_sk'].nunique()
-            total_users_prev_month = int(df_prev['user_sk'].nunique())
-            st.metric(label='', value=format_num(total_users), delta=total_users_prev_month)
+            st.metric(label='Total Users', value=format_num(total_users))
     with col[2]:
         with st.container(border=True):
-            new_users_list = []
-            present_users_list = df_present['user_sk'].unique()
-            prev_users_list = df_prev['user_sk'].unique()
-            for x in present_users_list:
-                if x not in prev_users_list:
-                    new_users_list.append(x)
-            new_users = len(set(new_users_list))
-            st.markdown('#### New Users')
-            st.metric(label='', value=format_num(new_users))
+            avg_listing_price = df_present['listing_price'].mean()
+            st.metric(label='Avg Listing Price (AED)', value=format_num(avg_listing_price))
     with col[3]:
         with st.container(border=True):
-            avg_listing_price = df_present['listing_price'].mean()
-            avg_listing_price_prev = df_prev['listing_price'].mean()
-            st.markdown('#### Avg Listing Price')
-            st.metric(label='', value=format_num(avg_listing_price))
+            listings_per_user = total_listings/total_users
+            st.metric(label='Listings Per User', value=format_num(listings_per_user))
     with col[4]:
         with st.container(border=True):
-            listings_per_user = round(total_listings/total_users,1)
-            st.markdown('#### Listings Per User')
-            st.metric(label='', value=listings_per_user)
-    charts_col = st.columns((0.7, 0.3), gap='medium')
-    
-    with charts_col[0]:
-        df_present['date'] = pd.to_datetime(df_present['time_posted_local']).dt.date
-        listing_count_df = df_present.groupby('date')['listing_sk'].count().reset_index()
-        st.markdown('#### Listings Trend')
-        st.line_chart(data=listing_count_df, x='date', y='listing_sk', use_container_width=True)
-        print(df_present.columns)
-        listing_category_count_df = df_present.groupby(['date', 'category_name_an'])['listing_sk'].count().reset_index()
-        heatmap = make_heatmap(listing_category_count_df, 'date', 'category_name_an', 'listing_sk', 'greens')
-        st.altair_chart(heatmap, use_container_width=True) 
-        
-    with charts_col[1]:
-        st.markdown('#### Top Categories')
-        category_count_df = df_present.groupby('category_name_an')['listing_sk'].count().reset_index()
-        st.dataframe(category_count_df,
-                     column_order=("Category", "Listings"),
-                     hide_index=True,
-                     width=None,
-                     column_config={
-                        "category_name_an": st.column_config.TextColumn(
-                            "Categories"
-                        ),
-                        "listing_sk": st.column_config.ProgressColumn(
-                            "Listings",
-                            format="%f",
-                            min_value=0,
-                            max_value=max(category_count_df['listing_sk']),
-                         )}
-                     )
+            gmv = df_present['listing_price'].sum()
+            st.metric(label='GMV (AED)', value=format_num(gmv))
             
+    charts_col = st.columns((0.7, 0.3), gap='medium')
+    with charts_col[0]:
+        with st.container(border=True):
+            df_present['time_posted_local'] = pd.to_datetime(df_present['time_posted_local'], errors='coerce', format='%d/%m/%y')
+            df_present['date'] = df_present['time_posted_local'].dt.date
+            listing_count_df = df_present.groupby('date')['listing_sk'].count().reset_index()
+            fig = px.line(
+            listing_count_df,
+            x='date',
+            y='listing_sk',
+            labels={'date': 'Posting Date', 'listing_sk': 'Number of Listings'},
+            title = 'Listings Created')
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with st.container(border=True):
+            bins = [0, 500, 1000, 1500, max_value]
+            labels = ['0-500', '500-1000', '1000-1500', '>1500']
+            df_present['price_bucket'] = pd.cut(df_present['listing_price'], bins=bins, labels=labels, right=False)
+            price_group = df_present.groupby('price_bucket')['listing_sk'].count().reset_index()
+            price_group.rename(columns={'listing_sk': 'total_listings'}, inplace=True)
+            fig = px.bar(
+                price_group,
+                x='price_bucket',
+                y='total_listings',
+                labels={'price_bucket': 'Price Range (AED)', 'total_listings': 'Total Listings'},
+                color='total_listings',
+                title='Total Listings by Price Range'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    with charts_col[1]:
+        with st.container(border=True):
+            category_group = df.groupby('category_name_an')['listing_sk'].count().reset_index()
+            category_group.rename(columns={'listing_sk': 'total_listings'}, inplace=True)
+            fig = px.pie(
+                category_group,
+                values='total_listings',
+                names='category_name_an',
+                title='Listings Across Categories',
+                color_discrete_sequence=px.colors.qualitative.Set2
+            )
+            fig.update_layout(
+            legend=dict(
+                orientation='h',  
+                yanchor='top',    
+                y=-0.3,           
+                xanchor='center', 
+                x=0.5             
+            ))
+            st.plotly_chart(fig, use_container_width=True)
 
 main()
