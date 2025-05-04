@@ -67,7 +67,7 @@ def main():
     with col[3]:
         with st.container(border=True):
             listings_per_user = total_listings/total_users
-            st.metric(label='Listings Per User', value=format_num(listings_per_user))
+            st.metric(label='Avg Listings Per User', value=format_num(listings_per_user))
     with col[4]:
         with st.container(border=True):
             gmv = df_present['listing_price'].sum()
