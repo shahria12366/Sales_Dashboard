@@ -23,7 +23,7 @@ def format_num(num):
 
 def main():
 
-    df = pd.read_csv("data_for_dashboard.csv")
+    df = pd.read_csv("data_for_dashboard_v1 copy.csv")
     df = df[df['outlier_flag']=='Normal']
     with st.sidebar:
         st.title("Bayut and Dubizzle Listings Dashboard")
